@@ -1,4 +1,4 @@
-Analysis of Impact of Red Card Recipient’s Poisiton on Match Outcome
+Position-Red-Cards
 ================
 Safia Read and Ben Schwartz
 04/18/2022
@@ -10,7 +10,7 @@ Safia Read and Ben Schwartz
 Binder](http://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/safiaread/Position-Red-Cards/main?urlpath=rstudio)
 <!-- badges: end -->
 
-# Analysis of Impact of Red Card Recipient’s Poisiton on Match Outcome
+# Analysis of Impact of Red Card Recipient’s Position on Match Outcome
 
 ## Safia Read and Ben Schwartz
 
