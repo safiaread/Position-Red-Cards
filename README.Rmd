@@ -29,7 +29,7 @@ knitr::opts_chunk$set(
 #### -- Project Status: [Completed]
 
 ## Project Intro/Objective
-*The purpose of this project is to invsestigate whether the position a player is when they are recieving a red card has an impact on the outcome of the match. This is important because match outcome has several economic effects (sponsership, gambling, etc.) that makes winning a much more desirable outcome than losing. Knowing more about how red cards affect match outcome and also a team's offensive and defensive capabilities can help teams to strategize and betting sites to better formulate their live odds. 
+The purpose of this project is to investigate whether the position a football player is when they are receiving a red card has an impact on the outcome of the match. This is important because match outcome has several economic effects (sponsorship, gambling, etc.) that makes winning a much more desirable outcome than losing. Knowing more about how red cards affect match outcome and also a team's offensive and defensive capabilities can help teams to strategize and betting sites to better formulate their live odds. 
 
 ### Methods Used
 * Tidyverse and Lubridate packages to clean and merge datasets
@@ -42,8 +42,11 @@ knitr::opts_chunk$set(
 * R 
 
 ## Project Description
-*(Provide more detail on your project. What research questions are you exploring? What specific models and visualization techniques are you using and how? What challenges are you currently facing? What are potential next steps?)*
+The research question we explored was whether a player's position had an effect on how the team performed in a match. The football positions we investigated were defender, midfielder, and forward. We looked at match outcome and how the carded team and their opponent performed in four metrics: goals scored, shots on goal, shots on target, and corners earned. We used t.tests comparing the mean of subsets of each carded position with the mean of uncarded players to explore potential significant differences. We also used plotly and ggplot visualizations to look at factors affecting red cards as well as to compare the percentage of each match outcome of each subset of data. We used a KDE to visualize total fouls committed to gain a baseline understanding outside of red cards of the distribution of misconduct in a match. We then used regression to explore relationships between player position and match outcome. 
 
+We faced most of our challenges in cleaning and merging the datasets. The players dataset was missing many of values we desired such as Home and Away team and had to have values renamed for relevance to our project and consistency with the teams dataset. There was also some date discrepancies between the datasets that made us have to drop some values. 
+
+Potential future directions are expanding the scope of the project to more seasons or more leagues to better understand this phenomenon. This would also allow us to anaylze the goalkeeper position that we could not here because of lack of data. We could also look at more measures of team performance such as completed passes or saves. We could also investigate what factors cause red cards to be given, such as location, date, or referee bias.
 
 ## How to Use This Repository
 
@@ -52,6 +55,17 @@ This research compendium has been developed using the statistical programming la
 ### Project Structure
 
 *Put an ASCII tree here with your project's directory structure. Give a short description of where the different components of data and analysis are.*
+
+project
+|- DESCRIPTION          # project metadata and dependencies 
+|- README.md            # top-level description of content and guide to users
+|
+|- data/                # raw data, not changed once created
+|  +- cleaned_merged_seasons.csv      # player performance stats by match
+|  +- epl-allseasons-matchstats.csv      # team performance stats by match 
+|
+|- analysis/           
+|  +- red_card_analysis.Rmd   # R Markdown file with our analysis and descriptive comments
 
 ### Run in Your Web Browser
 
@@ -68,6 +82,9 @@ You can download this repository as a zip from from this URL: [main.zip](/archiv
 ### How to cite
 
 Please cite this project as:
+
+Read, Safia and Schwartz, Ben *Analysis of Impact of Red Card Recipient's Poisiton on Match OutcomeAnalysis of Impact of Red Card Recipient's Poisiton on Match Outcome* https://github.com/safiaread/Position-Red-Cards
+
 
 ### Licenses
 
