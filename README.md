@@ -14,8 +14,6 @@ Binder](http://mybinder.org/badge_logo.svg)](https://mybinder.org/v2/gh/safiarea
 
 ## Safia Read and Ben Schwartz
 
-- 
-
 #### – Project Status: \[Completed\]
 
 ## Project Intro/Objective
