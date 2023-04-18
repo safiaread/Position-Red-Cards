@@ -1,0 +1,676 @@
+---
+title: "sciposterdraft"
+author: "Safia Read"
+date: "2023-04-11"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+#Install packages
+library(tidyverse)
+library(dplyr)
+library(plotly)
+library(lubridate)
+```
+```{r}
+#Load datasets
+teams <- read.csv("~/Documents/GitHub/Position-Red-Cards/data/epl-allseasons-matchstats.csv")
+View(teams)  
+players <- read.csv("~/Documents/GitHub/Position-Red-Cards/data/cleaned_merged_seasons.csv")
+View(players)
+```
+
+``` {r}
+
+# Selecting most important variables and adding new variables for total combined team statistics
+total_mis_teams <-teams %>%
+  mutate(total_fouls = HomeFouls + AwayFouls, total_red_cards = HomeRedCards + AwayRedCards, total_yellow_cards = HomeYellowCards + AwayYellowCards)%>%
+  select(Season, Date, HomeTeam, AwayTeam, FullTime, total_fouls, total_red_cards, total_yellow_cards, Referee, HomeShots, HomeShotsOnTarget, HomeCorners, AwayShots, AwayShotsOnTarget, AwayCorners)
+
+#Filtering for matches with a red card and during the right year
+total_mis_teams_n <- total_mis_teams%>%
+  filter(total_red_cards>=1)%>%
+  filter(Season %in% c("2016/17","2017/18","2018/19","2019/20"))
+
+#Away or Home renaming for the opposite team (not the team of the player)
+players$was_home[players$was_home == "True"] <- "Away"
+players$was_home[players$was_home == "False"] <- "Home"
+
+#Reformatting time in order to be able to join, selecting relevant columns
+red_players <- players %>%
+pivot_wider(names_from = was_home, values_from = opp_team_name)%>%
+  filter(red_cards >= 1) %>%
+  filter(season_x != "2020-21", season_x != "2021-22")%>%
+  select(kickoff_time, Home, Away, yellow_cards, red_cards, saves, minutes, goals_scored, goals_conceded, assists, position, name, season_x)%>%
+  mutate(date = ymd_hms(kickoff_time))%>%
+  arrange(kickoff_time)%>%
+  separate(date, sep = " ", into = c("date", "time"))%>%
+  left_join(players) %>%
+  select(season_x, date, name, position, Home, Away, yellow_cards, red_cards, saves, minutes, goals_scored, goals_conceded, assists, was_home, team_h_score, team_a_score)%>%
+  mutate(outcome = was_home)
+
+#renaming values in red_players so consistent with teams
+red_players$season_x[red_players$season_x == "2016-17"]<- "2016/17"
+red_players$season_x[red_players$season_x == "2017-18"]<- "2017/18"
+red_players$season_x[red_players$season_x == "2018-19"]<- "2018/19"
+red_players$season_x[red_players$season_x == "2019-20"]<- "2019/20"
+red_players$Away[red_players$Away == "Spurs"]<- "Tottenham"
+red_players$Away[red_players$Away == "Man Utd"]<- "Man United"
+red_players$Home[red_players$Home == "Spurs"]<- "Tottenham"
+red_players$Home[red_players$Home == "Man Utd"]<- "Man United"
+
+# To fill in missing away and home team names in Players dataset
+for (i in 1:115){
+  if (is.na(red_players$Home[i])) {
+    for(j in 1:162){
+      if (red_players$date[i] == total_mis_teams_n$Date[j] & red_players$Away[i] == total_mis_teams_n$AwayTeam[j]) {
+        red_players$Home[i] <- total_mis_teams_n$HomeTeam[j]
+      }
+    }
+  }
+  if (is.na(red_players$Away[i])) {
+    for(j in 1:162){
+      if (red_players$date[i] == total_mis_teams_n$Date[j] & red_players$Home[i] == total_mis_teams_n$HomeTeam[j]) {
+        red_players$Away[i] <- total_mis_teams_n$AwayTeam[j]
+      }
+    }
+  }
+}
+
+#create new variables for player's team statistics (ex. my_score) and the opponent team's score (ex. n_my_score)
+red_players <- red_players%>%
+  mutate(my_score = was_home, my_shots = was_home, my_tar_shots = was_home, my_corners = was_home, n_my_score = was_home, n_my_shots = was_home, n_my_tar_shots = was_home, n_my_corners = was_home)
+
+#fill in my_score and n_my_score with player's team's score
+red_players$n_my_score[red_players$was_home == "Away"] <- red_players$team_a_score
+red_players$n_my_score[red_players$was_home == "Home"] <- red_players$team_h_score
+red_players$my_score[red_players$was_home == "Home"] <- red_players$team_a_score
+red_players$my_score[red_players$was_home == "Away"] <- red_players$team_h_score
+
+#select for relevant variables
+red_players <- red_players%>%
+  select(season_x, date, name, position, Home, Away, yellow_cards, red_cards, saves, minutes, goals_scored, goals_conceded, assists, was_home, my_score, my_shots, my_tar_shots, my_corners, n_my_score, n_my_shots, n_my_tar_shots, n_my_corners, outcome)
+
+#join altered team and player datasets
+combined_n <- total_mis_teams_n %>%
+  right_join(red_players, by = c("Season" = "season_x", "Date" = "date", "HomeTeam" = "Home", "AwayTeam" = "Away"))
+
+#preserve original combined dataset by creating sample_combined to do further analysis in case of mistakes
+sample_combined <- combined_n
+
+#fill in player's team's and opponent team's stats
+sample_combined$my_shots[sample_combined$my_shots == "Home"] <- sample_combined$AwayShots
+sample_combined$my_shots[sample_combined$my_shots == "Away"] <- sample_combined$HomeShots
+sample_combined$my_tar_shots[sample_combined$my_tar_shots == "Home"] <- sample_combined$AwayShotsOnTarget
+sample_combined$my_tar_shots[sample_combined$my_tar_shots == "Away"] <- sample_combined$HomeShotsOnTarget
+sample_combined$my_corners[sample_combined$my_corners == "Home"] <- sample_combined$AwayCorners
+sample_combined$my_corners[sample_combined$my_corners == "Away"] <- sample_combined$HomeCorners
+
+sample_combined$n_my_shots[sample_combined$n_my_shots == "Away"] <- sample_combined$AwayShots
+sample_combined$n_my_shots[sample_combined$n_my_shots == "Home"] <- sample_combined$HomeShots
+sample_combined$n_my_tar_shots[sample_combined$n_my_tar_shots == "Away"] <- sample_combined$AwayShotsOnTarget
+sample_combined$n_my_tar_shots[sample_combined$n_my_tar_shots == "Home"] <- sample_combined$HomeShotsOnTarget
+sample_combined$n_my_corners[sample_combined$n_my_corners == "Away"] <- sample_combined$AwayCorners
+sample_combined$n_my_corners[sample_combined$n_my_corners == "Home"] <- sample_combined$HomeCorners
+
+#get rid of redundant vars
+sample_combined <- sample_combined%>%
+  select(Season, Date, HomeTeam, AwayTeam, FullTime, total_red_cards, name, position, red_cards, minutes, was_home:n_my_corners,outcome)
+
+#Renaming outcome so it reflects the outcome in relation to the player
+sample_combined$outcome[sample_combined$FullTime == "AwayWin" & sample_combined$was_home == "Home"] <- "Win"
+sample_combined$outcome[sample_combined$FullTime == "HomeWin" & sample_combined$was_home == "Away"] <- "Win"
+sample_combined$outcome[sample_combined$FullTime == "AwayWin" & sample_combined$was_home == "Away"] <- "Lose"
+sample_combined$outcome[sample_combined$FullTime == "HomeWin" & sample_combined$was_home == "Home"] <- "Lose"
+sample_combined$outcome[sample_combined$FullTime == "Draw"] <- "Draw"
+
+sample_combined <- sample_combined[1:112,]
+
+```
+
+```{r}
+#Plot of when red card was given in matches
+ggplot(sample_combined, aes(y=minutes, x= outcome, color = position))+
+  geom_jitter(
+    width = 0.3
+  )+
+  theme_light()+
+  geom_hline(yintercept = 45, col = "orange")+
+  annotate("text", label = "Half Time", x = 2.5, y = 47, col = "orange")+
+  ggtitle("When Red Card Was Received")+
+  labs(x = "Match Outcome", y = "Minute")+
+  scale_color_manual(values=c("#648FFF", "#5D49B9", "#DC267F","#FE6100"))
+```
+
+```{r}
+#How goals scored is affected by red card position
+sample_combined%>%
+  group_by(position)%>%
+  summarise(mean(my_score))
+
+red_scores<- sample_combined%>%
+  group_by(position)%>%
+  count(my_score)%>%
+  mutate(percent_score = n/sum(n))
+
+plot_ly(red_scores, x=~my_score, y=~percent_score, color =~ position,type = "scatter", mode = "lines")%>%
+  layout()
+
+```
+
+```{r}
+#These are data sets that contain players and matches that did not involve red cards during the same time period
+
+total_non_mis_teams <- total_mis_teams%>%
+  filter(total_red_cards==0)%>%
+  filter(Season %in% c("2016/17","2017/18","2018/19","2019/20"))
+
+non_red_players <- players%>%
+pivot_wider(names_from = was_home, values_from = opp_team_name)%>%
+  filter(red_cards == 0) %>%
+  filter(season_x != "2020-21", season_x != "2021-22")%>%
+  select(kickoff_time, Home, Away, yellow_cards, red_cards, saves, minutes, goals_scored, goals_conceded, assists, position, name, season_x)%>%
+  mutate(date = ymd_hms(kickoff_time))%>%
+  arrange(kickoff_time)%>%
+  separate(date, sep = " ", into = c("date", "time"))%>%
+  left_join(players) %>%
+  select(season_x, date, name, position, Home, Away, yellow_cards, red_cards, saves, minutes, goals_scored, goals_conceded, assists, was_home, team_a_score, team_h_score)%>%
+  mutate(outcome = was_home)
+
+#renaming to be consistent with total_non_mis_teams
+
+non_red_players$season_x[non_red_players$season_x == "2016-17"]<- "2016/17"
+non_red_players$season_x[non_red_players$season_x == "2017-18"]<- "2017/18"
+non_red_players$season_x[non_red_players$season_x == "2018-19"]<- "2018/19"
+non_red_players$season_x[non_red_players$season_x == "2019-20"]<- "2019/20"
+non_red_players$Away[non_red_players$Away == "Spurs"]<- "Tottenham"
+non_red_players$Away[non_red_players$Away == "Man Utd"]<- "Man United"
+non_red_players$Home[non_red_players$Home == "Spurs"]<- "Tottenham"
+non_red_players$Home[non_red_players$Home == "Man Utd"]<- "Man United"
+non_red_players$Home[non_red_players$Home == "Sheffield Utd"]<- "Sheffield United"
+non_red_players$Away[non_red_players$Away == "Sheffield Utd"]<- "Sheffield United"
+
+# To fill in missing away and home team names in non_red_players dataset
+for (i in 1:49367){
+  if (is.na(non_red_players$Home[i])) {
+    for(j in 1:1358){
+      if (non_red_players$date[i] == total_non_mis_teams$Date[j] & non_red_players$Away[i] == total_non_mis_teams$AwayTeam[j]) {
+        non_red_players$Home[i] <- total_non_mis_teams$HomeTeam[j]
+      }
+    }
+  }
+  if (is.na(non_red_players$Away[i])) {
+    for(j in 1:162){
+      if (non_red_players$date[i] == total_non_mis_teams$Date[j] & non_red_players$Home[i] == total_non_mis_teams$HomeTeam[j]) {
+        non_red_players$Away[i] <- total_non_mis_teams$AwayTeam[j]
+      }
+    }
+  }
+}
+
+#backup copy of renamed dataset in case of mistakes bc it takes a while to load
+saved_n_rp <- non_red_players
+
+#create new variables and fill in player's team's and opponent team's stats
+non_red_players<- non_red_players%>%
+   mutate(my_score = was_home, my_shots = was_home, my_tar_shots = was_home, my_corners = was_home, n_my_score = was_home, n_my_shots = was_home, n_my_tar_shots = was_home, n_my_corners = was_home)
+
+non_red_players$my_score[non_red_players$was_home == "Away"] <- non_red_players$team_a_score
+non_red_players$my_score[non_red_players$was_home == "Home"] <- non_red_players$team_h_score
+non_red_players$n_my_score[non_red_players$was_home == "Home"] <- non_red_players$team_a_score
+non_red_players$n_my_score[non_red_players$was_home == "Away"] <- non_red_players$team_h_score
+
+# selecting for relevant variables
+non_red_players <- non_red_players%>%
+select(season_x, date, name, position, Home, Away, yellow_cards, red_cards, saves, minutes, goals_scored, goals_conceded, assists, was_home, my_score, my_shots, my_tar_shots, my_corners, n_my_score, n_my_shots, n_my_tar_shots, n_my_corners, outcome)
+
+#joining total_non_mis_teams and non_red_players
+combined_n_red <- total_non_mis_teams %>%
+  left_join(non_red_players, by = c("Season" = "season_x", "Date" = "date", "HomeTeam" = "Home", "AwayTeam" = "Away"))
+
+#fill in player's team's stats
+combined_n_red$my_shots[combined_n_red$my_shots == "Away"] <- combined_n_red$AwayShots
+combined_n_red$my_shots[combined_n_red$my_shots == "Home"] <- combined_n_red$HomeShots
+combined_n_red$my_tar_shots[combined_n_red$my_tar_shots == "Away"] <- combined_n_red$AwayShotsOnTarget
+combined_n_red$my_tar_shots[combined_n_red$my_tar_shots == "Home"] <- combined_n_red$HomeShotsOnTarget
+combined_n_red$my_corners[combined_n_red$my_corners == "Away"] <- combined_n_red$AwayCorners
+combined_n_red$my_corners[combined_n_red$my_corners == "Home"] <- combined_n_red$HomeCorners
+
+combined_n_red$n_my_shots[combined_n_red$n_my_shots == "Home"] <- combined_n_red$AwayShots
+combined_n_red$n_my_shots[combined_n_red$n_my_shots == "Away"] <- combined_n_red$HomeShots
+combined_n_red$n_my_tar_shots[combined_n_red$n_my_tar_shots == "Home"] <- combined_n_red$AwayShotsOnTarget
+combined_n_red$n_my_tar_shots[combined_n_red$n_my_tar_shots == "Away"] <- combined_n_red$HomeShotsOnTarget
+combined_n_red$n_my_corners[combined_n_red$n_my_corners == "Home"] <- combined_n_red$AwayCorners
+combined_n_red$n_my_corners[combined_n_red$n_my_corners == "Away"] <- combined_n_red$HomeCorners
+
+#get rid of redundant vars
+combined_n_red <- combined_n_red%>%
+  select(Season, Date, HomeTeam, AwayTeam, FullTime, total_red_cards, name, position, red_cards, minutes, was_home:n_my_corners,outcome)
+
+#Renaming outcome so it reflects the outcome in relation to the player
+combined_n_red$outcome[combined_n_red$FullTime == "AwayWin" & combined_n_red$was_home == "Home"] <- "Win"
+combined_n_red$outcome[combined_n_red$FullTime == "HomeWin" & combined_n_red$was_home == "Away"] <- "Win"
+combined_n_red$outcome[combined_n_red$FullTime == "AwayWin" & combined_n_red$was_home == "Away"] <- "Lose"
+combined_n_red$outcome[combined_n_red$FullTime == "HomeWin" & combined_n_red$was_home == "Home"] <- "Lose"
+combined_n_red$outcome[combined_n_red$FullTime == "Draw"] <- "Draw"
+```
+
+```{r}
+#looking at percent score for teams without red cards to compare to red cards
+
+the_combined_n_red <- combined_n_red%>%
+  group_by(position)%>%
+  count(outcome)
+
+the_combined_n_red <-  the_combined_n_red%>%
+  pivot_wider(names_from = outcome, values_from = n)
+
+the_combined_n_red <- the_combined_n_red%>%
+  mutate(total = Draw + Lose + Win)%>%
+  mutate(per_Draw = Draw/total, per_Win = Win/total, per_Lose = Lose/total)
+
+non_red_scores<- combined_n_red%>%
+  group_by(position)%>%
+  count(my_score)%>%
+  mutate(percent_score = n/sum(n))
+
+combined_n_red%>%
+  group_by(position)%>%
+  summarise(mean(my_score))
+
+plot_ly(non_red_scores, x=~my_score, y=~percent_score, color =~ position,type = "scatter", mode = "lines")
+```
+
+```{r}
+#Performing t.tests for possible significance on team performance variables
+
+#overall score for red card players compared to no red cards
+o_red_scores<- red_players%>%
+  select(my_score)
+o_red_scores <- as.numeric(unlist(o_red_scores))
+o_non_red_scores<- non_red_players %>%
+  select(my_score)
+o_non_red_scores <- as.numeric(unlist(o_non_red_scores))
+t.test(o_red_scores,o_non_red_scores)
+
+#overall score for defender red card players compared to no red cards
+d_red_scores<- red_players%>%
+  filter(position == "DEF")%>%
+  select(my_score)
+d_red_scores <- as.numeric(unlist(d_red_scores))
+t.test(d_red_scores, o_non_red_scores)
+
+#overall score for midfielder red card players compared to no red cards
+m_red_scores<- red_players%>%
+  filter(position == "MID")%>%
+  select(my_score)
+m_red_scores <- as.numeric(unlist(m_red_scores))
+t.test(m_red_scores, o_non_red_scores)
+
+##overall score for forward red card players compared to no red cards
+f_red_scores<- red_players%>%
+  filter(position == "FWD")%>%
+  select(my_score)
+f_red_scores <- as.numeric(unlist(f_red_scores))
+t.test(f_red_scores, o_non_red_scores)
+
+#No significant difference in amount of goals scored overall or by position between red cards and no red cards
+
+#overall shots on goal for red card players compared to no red cards
+o_red_shots<- sample_combined%>%
+  select(my_shots)
+o_red_shots <- as.numeric(unlist(o_red_shots))
+o_non_red_shots<- combined_n_red %>%
+  select(my_shots)
+o_non_red_shots <- as.numeric(unlist(o_non_red_shots))
+t.test(o_red_shots, o_non_red_shots)
+
+#overall shots on goal for defender red card players compared to no red cards
+d_red_shots<- sample_combined%>%
+  filter(position == "DEF")%>%
+  select(my_shots)
+d_red_shots <- as.numeric(unlist(d_red_shots))
+t.test(d_red_shots, o_non_red_shots)
+
+#overall shots on goal for midfielder red card players compared to no red cards
+m_red_shots<- sample_combined%>%
+  filter(position == "MID")%>%
+  select(my_shots)
+m_red_shots <- as.numeric(unlist(m_red_shots))
+t.test(m_red_shots, o_non_red_shots)
+
+#overall shots on goal for forward red card players compared to no red cards
+f_red_shots<- sample_combined%>%
+  filter(position == "FWD")%>%
+  select(my_shots)
+f_red_shots <- as.numeric(unlist(f_red_shots))
+t.test(f_red_shots, o_non_red_shots)
+
+#shots on goal significantly less for red card over non red card, especially when midfielder is sent off
+
+#overall shots on target for red card players compared to no red cards
+o_red_tar_shots<- sample_combined%>%
+  select(my_tar_shots)
+o_red_tar_shots <- as.numeric(unlist(o_red_tar_shots))
+o_non_red_tar_shots<- combined_n_red %>%
+  select(my_tar_shots)
+o_non_red_tar_shots <- as.numeric(unlist(o_non_red_tar_shots))
+t.test(o_red_tar_shots, o_non_red_tar_shots)
+
+#overall shots on target for defender red card players compared to no red cards
+d_red_tar_shots<- sample_combined%>%
+  filter(position == "DEF")%>%
+  select(my_tar_shots)
+d_red_tar_shots <- as.numeric(unlist(d_red_tar_shots))
+t.test(d_red_tar_shots, o_non_red_tar_shots)
+
+#overall shots on target for midfielder red card players compared to no red cards
+m_red_tar_shots<- sample_combined%>%
+  filter(position == "MID")%>%
+  select(my_tar_shots)
+m_red_tar_shots <- as.numeric(unlist(m_red_tar_shots))
+t.test(m_red_tar_shots, o_non_red_tar_shots)
+
+#overall shots on target for forward red card players compared to no red cards
+f_red_tar_shots<- sample_combined%>%
+  filter(position == "FWD")%>%
+  select(my_tar_shots)
+f_red_tar_shots <- as.numeric(unlist(f_red_tar_shots))
+t.test(f_red_tar_shots, o_non_red_tar_shots)
+
+#Significantly les shots on target for midfielders especially
+
+#overall corners for red card players compared to no red cards
+o_red_corners <- sample_combined%>%
+  select(my_corners)
+o_red_corners <- as.numeric(unlist(o_red_tar_shots))
+o_non_red_corners<- combined_n_red %>%
+  select(my_corners)
+o_non_red_corners <- as.numeric(unlist(o_non_red_corners))
+t.test(o_red_corners, o_non_red_corners)
+
+#overall corners for defender red card players compared to no red cards
+d_red_corners<- sample_combined%>%
+  filter(position == "DEF")%>%
+  select(my_corners)
+d_red_corners <- as.numeric(unlist(d_red_corners))
+t.test(d_red_corners, o_non_red_corners)
+
+#overall corners for midfielders red card players compared to no red cards
+m_red_corners<- sample_combined%>%
+  filter(position == "MID")%>%
+  select(my_corners)
+m_red_corners <- as.numeric(unlist(m_red_corners))
+t.test(m_red_corners, o_non_red_corners)
+
+#overall corners for forward red card players compared to no red cards
+f_red_corners<- sample_combined%>%
+  filter(position == "FWD")%>%
+  select(my_corners)
+f_red_corners <- as.numeric(unlist(f_red_corners))
+t.test(f_red_corners, o_non_red_corners)
+
+#Significant difference in more corners overall, when a midfielder receives a red card
+```
+
+```{r}
+#same analysis as the code chunk above but done using statistics from the opponent team in order to see whether a team's defensive abilities decreased
+
+o_red_scores<- red_players%>%
+  select(n_my_score)
+o_red_scores <- as.numeric(unlist(o_red_scores))
+o_non_red_scores<- non_red_players %>%
+  select(n_my_score)
+o_non_red_scores <- as.numeric(unlist(o_non_red_scores))
+t.test(o_red_scores,o_non_red_scores)
+
+d_red_scores<- red_players%>%
+  filter(position == "DEF")%>%
+  select(n_my_score)
+d_red_scores <- as.numeric(unlist(d_red_scores))
+t.test(d_red_scores, o_non_red_scores)
+
+m_red_scores<- red_players%>%
+  filter(position == "MID")%>%
+  select(n_my_score)
+m_red_scores <- as.numeric(unlist(m_red_scores))
+t.test(m_red_scores, o_non_red_scores)
+
+f_red_scores<- red_players%>%
+  filter(position == "FWD")%>%
+  select(n_my_score)
+f_red_scores <- as.numeric(unlist(f_red_scores))
+t.test(f_red_scores, o_non_red_scores)
+
+#No significant difference in amount of goals scored overall or by position between red cards and no red cards
+
+o_red_shots<- sample_combined%>%
+  select(n_my_shots)
+o_red_shots <- as.numeric(unlist(o_red_shots))
+o_non_red_shots<- combined_n_red %>%
+  select(n_my_shots)
+o_non_red_shots <- as.numeric(unlist(o_non_red_shots))
+t.test(o_red_shots, o_non_red_shots)
+
+d_red_shots<- sample_combined%>%
+  filter(position == "DEF")%>%
+  select(n_my_shots)
+d_red_shots <- as.numeric(unlist(d_red_shots))
+t.test(d_red_shots, o_non_red_shots)
+
+m_red_shots<- sample_combined%>%
+  filter(position == "MID")%>%
+  select(n_my_shots)
+m_red_shots <- as.numeric(unlist(m_red_shots))
+t.test(m_red_shots, o_non_red_shots)
+
+f_red_shots<- sample_combined%>%
+  filter(position == "FWD")%>%
+  select(n_my_shots)
+f_red_shots <- as.numeric(unlist(f_red_shots))
+t.test(f_red_shots, o_non_red_shots)
+
+
+#shots on goal significantly greater for red card over non red card, especially when midfielder is sent off
+
+o_red_tar_shots<- sample_combined%>%
+  select(my_tar_shots)
+o_red_tar_shots <- as.numeric(unlist(o_red_tar_shots))
+o_non_red_tar_shots<- combined_n_red %>%
+  select(n_my_tar_shots)
+o_non_red_tar_shots <- as.numeric(unlist(o_non_red_tar_shots))
+t.test(o_red_tar_shots, o_non_red_tar_shots)
+
+d_red_tar_shots<- sample_combined%>%
+  filter(position == "DEF")%>%
+  select(n_my_tar_shots)
+d_red_tar_shots <- as.numeric(unlist(d_red_tar_shots))
+t.test(d_red_tar_shots, o_non_red_tar_shots)
+
+m_red_tar_shots<- sample_combined%>%
+  filter(position == "MID")%>%
+  select(n_my_tar_shots)
+m_red_tar_shots <- as.numeric(unlist(m_red_tar_shots))
+t.test(m_red_tar_shots, o_non_red_tar_shots)
+
+f_red_tar_shots<- sample_combined%>%
+  filter(position == "FWD")%>%
+  select(n_my_tar_shots)
+f_red_tar_shots <- as.numeric(unlist(f_red_tar_shots))
+t.test(f_red_tar_shots, o_non_red_tar_shots)
+
+#Significantly higher shots on target for red card over normal, midfielders especially
+
+o_red_corners <- sample_combined%>%
+  select(my_corners)
+o_red_corners <- as.numeric(unlist(o_red_tar_shots))
+o_non_red_corners<- combined_n_red %>%
+  select(n_my_corners)
+o_non_red_corners <- as.numeric(unlist(o_non_red_corners))
+t.test(o_red_corners, o_non_red_corners)
+
+d_red_corners<- sample_combined%>%
+  filter(position == "DEF")%>%
+  select(n_my_corners)
+d_red_corners <- as.numeric(unlist(d_red_corners))
+t.test(d_red_corners, o_non_red_corners)
+
+m_red_corners<- sample_combined%>%
+  filter(position == "MID")%>%
+  select(n_my_corners)
+m_red_corners <- as.numeric(unlist(m_red_corners))
+t.test(m_red_corners, o_non_red_corners)
+
+f_red_corners<- sample_combined%>%
+  filter(position == "FWD")%>%
+  select(n_my_corners)
+f_red_corners <- as.numeric(unlist(f_red_corners))
+t.test(f_red_corners, o_non_red_corners)
+
+#Significant difference in more corners when a midfielder receives a red card
+```
+
+```{r}
+# Briefly investigating possible differences in performace between first and second half performance
+
+second_half <- sample_combined%>%
+  filter(minutes >=45)
+
+summary(second_half)
+
+sh_out <- second_half%>%
+  group_by(outcome)%>%
+  summarise(n()/68)
+
+first_half<- sample_combined%>%
+  filter(minutes<=45)
+
+fh_out <- first_half%>%
+  group_by(outcome)%>%
+  summarise(n()/45)
+
+first_half%>%
+  group_by(position)%>%
+  count()
+
+second_half%>%
+  group_by(position)%>%
+  count()
+
+```
+
+```{r}
+#Plotting percent of each match outcome by position and compared to matches without red cards
+
+n_red_win <- combined_n_red %>%
+  group_by(outcome)%>%
+  count()%>%
+  mutate(percent = n/(11586+6865+	5409))%>%
+  arrange(desc(outcome))
+
+nr_plot <- plot_ly(x=~outcome, y=~percent, data=n_red_win, name = "Non Red Card", marker = list(color = c("#1f77b4", "#ff7f0e", "#2ca02c")))%>% 
+layout(xaxis = list(categoryorder = "category descending", title = "Matches Without Red Cards", showticklabels = FALSE))
+
+#outcome distribution by position
+sample_combined_n <- sample_combined%>%
+  group_by(position)%>%
+  count(outcome)
+
+View(sample_combined)
+
+sample_combined_n <- sample_combined_n%>%
+  pivot_wider(names_from = outcome, values_from = n)
+ sample_combined_n[3,2] <- 0
+
+sample_combined_n <- sample_combined_n%>%
+  mutate(total = Draw + Lose + Win)%>%
+  mutate(per_Draw = Draw/total, per_Win = Win/total, per_Lose = Lose/total)
+
+r_plot <- sample_combined_n%>%
+    plot_ly(x=~position, y=~per_Win, type = "bar", name = "Win")%>%
+  add_bars(y=~per_Lose, name = "Lose")%>%
+  add_bars(y=~per_Draw, name = "Draw") %>%
+  layout(title = "Percent Match Outcome When Each Position Receives a Red Card", yaxis = list(title = "Percent"), xaxis = list(title = "Position"))
+
+subplot(r_plot, nr_plot, shareY = T, widths = c(0.78, 0.22))
+```
+
+```{r}
+#looking at how many of each position's cards were gained at home versus away
+sample_combined%>%
+  group_by(was_home, position)%>%
+  summarise(n())
+```
+
+```{r}
+#Install necessary packages for KDE
+
+install.packages('kdensity')
+library("kdensity")
+```
+
+```{r}
+#simple histogram
+hist(sample_combined$total_fouls)
+
+#plotting kde of total_fouls
+kde = kdensity(sample_combined$total_fouls, start = 'gumbel', kernel = 'gaussian')
+plot(kde, main="Kernel Density of Total Fouls")
+
+#plotting parametric kde
+plot(kde, main="Parametric Kernel Density of Total Fouls")
+lines(kde, plot_start = TRUE, col = 'red')
+rug(sample_combined$total_fouls)
+
+#kernel density information
+summary(kde)
+```
+
+```{r}
+#install packages for regression analysis
+install.packages("fastDummies")
+library(fastDummies)
+```
+
+```{r}
+#create multiple dummies
+sample_combined <- dummy_cols(sample_combined, select_columns = c("outcome", "position"))
+sample_combined <- dummy_cols(sample_combined, select_columns = "outcome")
+def_sample_combined<- sample_combined%>%
+  filter(position == "DEF")
+red_players <- dummy_cols(red_players, select_columns = "outcome")
+non_red_players <- dummy_cols(non_red_players, select_columns = "outcome")
+combined_n_red <- dummy_cols(combined_n_red, select_columns = "outcome")
+```
+```{r}
+#regressions for sample_combined
+reg_Win <- lm(outcome_Win ~ position_DEF, data = sample_combined)
+reg_Win <- lm(outcome_Win ~ position_MID, data = sample_combined)
+reg_Win <- lm(outcome_Win ~ position_FWD, data = sample_combined)
+summary(reg_Win)
+reg_Lose <- lm(outcome_Lose ~ position_DEF, data = sample_combined)
+reg_Lose <- lm(outcome_Lose ~ position_MID, data = sample_combined)
+reg_Lose <- lm(outcome_Lose ~ position_FWD, data = sample_combined)
+summary(reg_Lose)
+reg_Draw <- lm(outcome_Draw ~ position_DEF, data = sample_combined)
+reg_Draw <- lm(outcome_Draw ~ position_MID, data = sample_combined)
+reg_Draw <- lm(outcome_Draw ~ position_FWD, data = sample_combined)
+summary(reg_Draw)
+
+plot(sample_combined$position,sample_combined$outcome_Win,
+     main='Regression for Winning and Position',
+     xlab='position',ylab='winning')
+abline(lm(outcome_Win ~ position - 1, data = sample_combined), col = "red")
+
+#regressions for combined_n_red
+reg_Win <- lm(outcome_Win ~ position - 1, data = sample_combined)
+summary(reg_Win)
+reg_Lose <- lm(outcome_Lose ~ position - 1, data = sample_combined)
+summary(reg_Lose)
+reg_Draw <- lm(outcome_Draw ~ position - 1, data = sample_combined)
+summary(reg_Draw)
+```

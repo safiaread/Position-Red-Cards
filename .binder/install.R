@@ -1,0 +1,12 @@
+install.packages(
+ c( 
+  "dplyr",
+  "fastDummies",
+  "kdensity",
+  "knitr",
+  "lubridate",
+  "plotly",
+  "renv",
+  "rmarkdown",
+  "tidyverse")
+)
