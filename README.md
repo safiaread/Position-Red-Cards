@@ -48,15 +48,13 @@ programming language R.
 ### Project Structure
 
 project
-|- DESCRIPTION          # project metadata and dependencies 
-|- README.md            # top-level description of content and guide to users
-|
-|- data/                # raw data, not changed once created
-|  +- cleaned_merged_seasons.csv      # player performance stats by match
-|  +- epl-allseasons-matchstats.csv      # team performance stats by match 
-|
-|- analysis/           
-|  +- red_card_analysis.Rmd   # R Markdown file with our analysis and descriptive comments
+.
+├── analysis/
+│   └── red_card_analysis.Rmd       # R Markdown file with our analysis and descriptive comments
+├── data/
+│   ├── cleaned_merged_seasons.csv      # player performance stats by match
+│   └── epl-allseasons-matchstats.csv      # team performance stats by match 
+└── READ.ME.md       #description of project
 
 ### Run in Your Web Browser
 
