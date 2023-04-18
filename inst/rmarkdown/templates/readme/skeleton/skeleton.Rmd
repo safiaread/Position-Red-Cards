@@ -1,0 +1,68 @@
+---
+title: "My Data Analysis Project"
+author: "Your Name"
+date: "The Date"
+output: 
+  github_document:
+    html_preview: FALSE
+---
+
+<!-- README.md is generated from README.Rmd. Please edit that file -->
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "README-"
+)
+```
+
+<!-- badges: start -->
+<!-- badges: end -->
+
+# Project Name
+
+## Contributors
+* 
+
+#### -- Project Status: [Active, On-Hold, Completed]
+
+## Project Intro/Objective
+The purpose of this project is ________. *(Describe the main goals of the project and potential impact in a few sentences.)*
+
+### Methods Used
+* 
+
+### Platforms and Languages
+* R 
+
+## Project Description
+*(Provide more detail on your project. What research questions are you exploring? What specific models and visualization techniques are you using and how? What challenges are you currently facing? What are potential next steps?)*
+
+
+## How to Use This Repository
+
+This research compendium has been developed using the statistical programming language R. 
+
+### Project Structure
+
+*Put an ASCII tree here with your project's directory structure. Give a short description of where the different components of data and analysis are.*
+
+### Run in Your Web Browser
+
+You can click the "binder" badge above to open this repository using RStudio in your browser. Then, please open...
+
+### Download and Run Locally
+
+To work with the repository on your local computer, you will need the [R software](https://cloud.r-project.org/) and RStudio Desktop](https://rstudio.com/products/rstudio/download/).
+
+You can download this repository as a zip from from this URL: [main.zip](/archive/main.zip). After unzipping, please run `renv::hydrate()` in the console to install the necessary packages.
+
+### Featured Notebooks/Analysis/Deliverables or Demo
+
+### How to cite
+
+Please cite this project as:
+
+### Licenses
+
